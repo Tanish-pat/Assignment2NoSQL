@@ -1,0 +1,387 @@
+cls: 
+ls: 
+commands.sh
+Data
+DF.jar
+output
+out.txt
+pom.xml
+src
+target
+tree src/ target/ output/: 
+src/
+└── main
+    └── java
+        ├── Problem2a
+        │   ├── DocumentFrequency.java
+        │   └── howtorun.txt
+        └── Problem2b
+            ├── howtorun.txt
+            └── TFScore.java
+target/
+├── Assignment2NoSQL-1.0-SNAPSHOT.jar
+├── classes
+│   ├── Problem2a
+│   │   ├── DocumentFrequency$DFMapper.class
+│   │   ├── DocumentFrequency$DFReducer.class
+│   │   ├── DocumentFrequency.class
+│   │   └── howtorun.txt
+│   └── Problem2b
+│       ├── howtorun.txt
+│       ├── TFScore$TFScoreReducer.class
+│       ├── TFScore$TFStripesMapper.class
+│       └── TFScore.class
+├── generated-sources
+│   └── annotations
+├── maven-archiver
+│   └── pom.properties
+└── maven-status
+    └── maven-compiler-plugin
+        └── compile
+            └── default-compile
+                ├── createdFiles.lst
+                └── inputFiles.lst
+output/
+├── output_2a
+│   ├── part-r-00000
+│   └── _SUCCESS
+└── output_2b
+    ├── part-r-00000
+    └── _SUCCESS
+
+19 directories, 20 files
+cat pom.xml: 
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.tanish</groupId>
+    <artifactId>Assignment2NoSQL</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
+            <version>3.3.6</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-mapreduce-client-core</artifactId>
+            <version>3.3.6</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.opennlp</groupId>
+            <artifactId>opennlp-tools</artifactId>
+            <version>1.9.3</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>cat src/main/java/Problem2a/DocumentFrequency.java: 
+package Problem2a;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.net.URI;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileSplit;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import opennlp.tools.stemmer.PorterStemmer;
+
+public class DocumentFrequency {
+
+    public static class DFMapper extends Mapper<Object, Text, Text, Text> {
+        private Set<String> stopWords = new HashSet<>();
+        private PorterStemmer stemmer;
+        private Text word = new Text();
+        private Text docId = new Text();
+
+        @Override
+        protected void setup(Context context) throws IOException, InterruptedException {
+            stemmer = new PorterStemmer();
+            URI[] cacheFiles = context.getCacheFiles();
+            if (cacheFiles != null && cacheFiles.length > 0) {
+                try (BufferedReader reader = new BufferedReader(
+                        new FileReader(new Path(cacheFiles[0].getPath()).getName()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        stopWords.add(line.trim().toLowerCase());
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+            String fileName = ((FileSplit) context.getInputSplit()).getPath().getName();
+            docId.set(fileName);
+
+            String line = value.toString().toLowerCase();
+            String[] tokens = line.split("[^\\w']+");
+
+            for (String token : tokens) {
+                if (token.isEmpty() || stopWords.contains(token))
+                    continue;
+
+                String stemmed = stemmer.stem(token);
+                if (!stopWords.contains(stemmed)) {
+                    word.set(stemmed);
+                    context.write(word, docId);
+                }
+            }
+        }
+    }
+
+    public static class DFReducer extends Reducer<Text, Text, Text, IntWritable> {
+        @Override
+        public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+            Set<String> uniqueDocs = new HashSet<>();
+            for (Text val : values) {
+                uniqueDocs.add(val.toString());
+            }
+            context.write(key, new IntWritable(uniqueDocs.size()));
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        Configuration conf = new Configuration();
+
+        // This parses and removes Hadoop-specific arguments like -libjars
+        String[] otherArgs = new org.apache.hadoop.util.GenericOptionsParser(conf, args).getRemainingArgs();
+
+        Job job = Job.getInstance(conf, "Document Frequency");
+        job.setJarByClass(DocumentFrequency.class);
+        job.setMapperClass(DFMapper.class);
+        job.setReducerClass(DFReducer.class);
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(Text.class);
+
+        // Now we safely use otherArgs instead of args
+        job.addCacheFile(new Path(otherArgs[2]).toUri());
+
+        FileInputFormat.addInputPath(job, new Path(otherArgs[0]));
+        FileOutputFormat.setOutputPath(job, new Path(otherArgs[1]));
+
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+    }
+}
+cat src/main/java/Problem2a/howtorun.txt: 
+Instructions to run Problem 2a (Document Frequency & Top 100 Extraction)
+
+1. Navigate to your root directory:
+cd ~/snap/snapd-desktop-integration/253/Desktop/Assignment2NoSQL
+
+2. Compile and package the code using Maven:
+mvn clean package
+
+3. Export the OpenNLP jar to Hadoop's classpath (Required to prevent ClassNotFound errors in local mode):
+export HADOOP_CLASSPATH=$(pwd)/Data/opennlp-tools-1.9.3.jar
+
+4. Run the MapReduce job on the test dataset (ensure the output_2a directory does not already exist):
+hadoop jar target/Assignment2NoSQL-1.0-SNAPSHOT.jar Problem2a.DocumentFrequency Data/Wikipedia-50-ARTICLES output/output_2a Data/stopwords.txt
+
+5. Identify the Top 100 terms:
+Sort the TSV output in descending order by the second column (DF) and save the top 100.
+cat output/output_2a/part-r-00000 | sort -k2,2nr | head -n 100 > Data/top100_df.tsv
+cat src/main/java/Problem2b/TFScore.java: 
+package Problem2b;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.net.URI;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.MapWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileSplit;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import opennlp.tools.stemmer.PorterStemmer;
+
+public class TFScore {
+
+    public static class TFStripesMapper extends Mapper<Object, Text, Text, MapWritable> {
+        private Map<String, Integer> top100DF = new HashMap<>();
+        private PorterStemmer stemmer;
+        private Text docId = new Text();
+
+        @Override
+        protected void setup(Context context) throws IOException, InterruptedException {
+            stemmer = new PorterStemmer();
+            URI[] cacheFiles = context.getCacheFiles();
+            if (cacheFiles != null && cacheFiles.length > 0) {
+                try (BufferedReader reader = new BufferedReader(
+                        new FileReader(new Path(cacheFiles[0].getPath()).getName()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        String[] parts = line.split("\t");
+                        if (parts.length == 2) {
+                            top100DF.put(parts[0], Integer.parseInt(parts[1]));
+                        }
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+            String fileName = ((FileSplit) context.getInputSplit()).getPath().getName();
+            docId.set(fileName);
+
+            String line = value.toString().toLowerCase();
+            String[] tokens = line.split("[^\\w']+");
+
+            MapWritable stripe = new MapWritable();
+
+            for (String token : tokens) {
+                if (token.isEmpty())
+                    continue;
+                String stemmed = stemmer.stem(token);
+
+                if (top100DF.containsKey(stemmed)) {
+                    Text termText = new Text(stemmed);
+                    if (stripe.containsKey(termText)) {
+                        IntWritable count = (IntWritable) stripe.get(termText);
+                        stripe.put(termText, new IntWritable(count.get() + 1));
+                    } else {
+                        stripe.put(termText, new IntWritable(1));
+                    }
+                }
+            }
+            if (!stripe.isEmpty()) {
+                context.write(docId, stripe);
+            }
+        }
+    }
+
+    public static class TFScoreReducer extends Reducer<Text, MapWritable, Text, Text> {
+        private Map<String, Integer> top100DF = new HashMap<>();
+
+        @Override
+        protected void setup(Context context) throws IOException, InterruptedException {
+            URI[] cacheFiles = context.getCacheFiles();
+            if (cacheFiles != null && cacheFiles.length > 0) {
+                try (BufferedReader reader = new BufferedReader(
+                        new FileReader(new Path(cacheFiles[0].getPath()).getName()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        String[] parts = line.split("\t");
+                        if (parts.length == 2) {
+                            top100DF.put(parts[0], Integer.parseInt(parts[1]));
+                        }
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void reduce(Text key, Iterable<MapWritable> values, Context context)
+                throws IOException, InterruptedException {
+            Map<String, Integer> combinedStripe = new HashMap<>();
+
+            for (MapWritable val : values) {
+                for (Map.Entry<Writable, Writable> entry : val.entrySet()) {
+                    String term = entry.getKey().toString();
+                    int count = ((IntWritable) entry.getValue()).get();
+                    combinedStripe.put(term, combinedStripe.getOrDefault(term, 0) + count);
+                }
+            }
+
+            for (Map.Entry<String, Integer> entry : combinedStripe.entrySet()) {
+                String term = entry.getKey();
+                int tf = entry.getValue();
+                int df = top100DF.get(term);
+
+                double score = tf * Math.log10(10000.0 / df + 1);
+
+                String outValue = term + "\t" + String.format("%.4f", score);
+                context.write(key, new Text(outValue));
+            }
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        Configuration conf = new Configuration();
+
+        // This parses and removes Hadoop-specific arguments like -libjars
+        String[] otherArgs = new org.apache.hadoop.util.GenericOptionsParser(conf, args).getRemainingArgs();
+
+        Job job = Job.getInstance(conf, "TF Score Calculation");
+        job.setJarByClass(TFScore.class);
+
+        job.setMapperClass(TFStripesMapper.class);
+        job.setReducerClass(TFScoreReducer.class);
+
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(org.apache.hadoop.io.MapWritable.class);
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(Text.class);
+
+        // Now we safely use otherArgs instead of args
+        job.addCacheFile(new Path(otherArgs[2]).toUri());
+
+        FileInputFormat.addInputPath(job, new Path(otherArgs[0]));
+        FileOutputFormat.setOutputPath(job, new Path(otherArgs[1]));
+
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+    }
+}
+cat src/main/java/Problem2b/howtorun.txt: 
+Instructions to run Problem 2b (TF & Score Calculation using Stripes)
+
+1. Navigate to your root directory:
+cd ~/snap/snapd-desktop-integration/253/Desktop/Assignment2NoSQL
+
+2. Compile the code (if you haven't already):
+mvn clean package
+
+3. Export the OpenNLP jar to Hadoop's classpath (Required to prevent ClassNotFound errors in local mode):
+export HADOOP_CLASSPATH=$(pwd)/Data/opennlp-tools-1.9.3.jar
+
+4. Run the MapReduce job on the test dataset (ensure output_2b directory does not exist):
+hadoop jar target/Assignment2NoSQL-1.0-SNAPSHOT.jar Problem2b.TFScore Data/Wikipedia-50-ARTICLES output/output_2b Data/top100_df.tsv
+
+5. Check the output:
+(The output schema will be ID<tab>TERM<tab>SCORE)
+cat output/output_2b/part-r-00000 | head -n 50

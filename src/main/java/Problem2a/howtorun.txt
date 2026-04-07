@@ -1,0 +1,18 @@
+Instructions to run Problem 2a (Document Frequency & Top 100 Extraction)
+
+1. Navigate to your root directory:
+cd ~/snap/snapd-desktop-integration/253/Desktop/Assignment2NoSQL
+
+2. Compile and package the code using Maven:
+mvn clean package
+
+3. Export the OpenNLP jar to Hadoop's classpath (Required to prevent ClassNotFound errors in local mode):
+export HADOOP_CLASSPATH=$(pwd)/Data/opennlp-tools-1.9.3.jar
+
+4. Run the MapReduce job on the test dataset (ensure the output_2a directory does not already exist):
+hadoop jar target/Assignment2NoSQL-1.0-SNAPSHOT.jar Problem2a.DocumentFrequency Data/Wikipedia-50-ARTICLES output/output_2a Data/stopwords.txt
+hadoop jar target/Assignment2NoSQL-1.0-SNAPSHOT.jar Problem2a.DocumentFrequency Data/Wikipedia-EN-20120601_ARTICLES output/output_2a Data/stopwords.txt
+
+5. Identify the Top 100 terms:
+Sort the TSV output in descending order by the second column (DF) and save the top 100.
+cat output/output_2a/part-r-00000 | sort -k2,2nr | head -n 100 > Data/top100_df.tsv
