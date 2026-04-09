@@ -1,0 +1,4 @@
+javac -classpath `hadoop classpath` -d . PairsCoOccurrence.java
+jar -cvf Part1b.jar PairsCoOccurrence*.class
+hadoop jar Part1b.jar PairsCoOccurrence -D distance.d=1 Wikipedia-50-ARTICLES out_1b
+// in the hadoop command change distance.d=1 to anytihing in {1,2,3,4}
