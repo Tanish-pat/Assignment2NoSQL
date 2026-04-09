@@ -1,3 +1,3 @@
 javac -classpath `hadoop classpath` -d . Top50Words.java
 jar -cvf Part1a.jar Top50Words*.class
-hadoop jar Part1a.jar Top50Words Wikipedia-50-ARTICLES out_1a
+hadoop jar Part1a.jar Top50Words ../Wikipedia-50-ARTICLES out
