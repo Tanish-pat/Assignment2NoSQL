@@ -1,0 +1,18 @@
+Instructions to run Problem 2b (TF & Score Calculation using Stripes)
+
+1. Navigate to your root directory:
+cd ~/snap/snapd-desktop-integration/253/Desktop/Assignment2NoSQL
+
+2. Compile the code (if you haven't already):
+mvn clean package
+
+3. Export the OpenNLP jar to Hadoop's classpath (Required to prevent ClassNotFound errors in local mode):
+export HADOOP_CLASSPATH=$(pwd)/Data/opennlp-tools-1.9.3.jar
+
+4. Run the MapReduce job on the test dataset (ensure output_2b directory does not exist):
+hadoop jar target/Assignment2NoSQL-1.0-SNAPSHOT.jar Problem2b.TFScore Data/Wikipedia-50-ARTICLES output/output_2b Data/top100_df.tsv
+hadoop jar target/Assignment2NoSQL-1.0-SNAPSHOT.jar Problem2b.TFScore Data/Wikipedia-EN-20120601_ARTICLES output/output_2b Data/top100_df.tsv
+
+5. Check the output:
+(The output schema will be ID<tab>TERM<tab>SCORE)
+cat output/output_2b/part-r-00000 | head -n 50
