@@ -1,0 +1,4 @@
+javac -classpath `hadoop classpath` -d . PairsClassAggregation.java
+jar -cvf Part1e.jar PairsClassAggregation*.class    
+time hadoop jar Part1e.jar PairsClassAggregation -D distance.d=4 ../Wikipedia-EN-20120601_ARTICLES out_1e_d4
+// in the hadoop command change distance.d=1 to anytihing in {1,2,3,4}
