@@ -1,4 +1,3 @@
-Here’s your content turned into a clean, professional **README.md**:
 
 ---
 
